@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>날씨가 지운 운동시간</title>
+<meta name="description" content="공공체육시설이 폭염·한파·비로 실제로 잃는 이용시간을 국민체육진흥공단 이용 데이터로 재고, 지금 갈 수 있는 실내 대안을 알려주는 서비스">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⛅</text></svg>">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <h1>날씨가 지운 운동시간</h1>
+    <p class="lede">공공체육시설 통계는 실외 운동장도 1년 내내 같은 1곳으로 셉니다. 하지만 폭염·한파·비가 오는 시간에는 사람들이 실제로 오지 않습니다. 이 서비스는 국민체육진흥공단의 실제 이용 기록으로 <b>날씨 때문에 잃는 운동시간</b>을 재고, 오늘 쓸 수 있는 시간과 실내 대안을 알려줍니다.</p>
+    <div class="picker" role="group" aria-label="지역 선택">
+      <label>시·도 <select id="sido"></select></label>
+      <label>시·군·구 <select id="sgg"></select></label>
+      <button id="locate" type="button">내 위치로 찾기</button>
+      <span id="locmsg" class="muted" aria-live="polite"></span>
+    </div>
+  </div>
+</header>
+
+<nav class="tabs wrap" role="tablist">
+  <button role="tab" data-tab="today" aria-selected="true">오늘 운동하기</button>
+  <button role="tab" data-tab="region" aria-selected="false">우리 지역 진단</button>
+  <button role="tab" data-tab="nation" aria-selected="false">전국 비교</button>
+  <button role="tab" data-tab="method" aria-selected="false">근거와 방법</button>
+</nav>
+
+<main class="wrap">
+  <section id="tab-today" class="tab">
+    <div class="card">
+      <h2 id="today-title">오늘과 내일, 밖에서 운동하기 좋은 시간</h2>
+      <p id="today-summary" class="big">예보를 불러오는 중…</p>
+      <div id="strip" class="strip" aria-label="시간대별 야외 운동 가능도"></div>
+      <div class="legend">
+        <span><i class="sw" style="background:var(--good)"></i>평소만큼(90% 이상)</span>
+        <span><i class="sw" style="background:var(--mid)"></i>조금 줄어듦(75~90%)</span>
+        <span><i class="sw" style="background:var(--bad)"></i>많이 줄어듦(75% 미만)</span>
+        <span><b class="pm">미</b> 초미세먼지 나쁨 예보</span>
+      </div>
+      <p class="muted small">칸의 숫자는 '체감 20°C·비 없음'일 때를 100으로 본 예상 이용 비율입니다. 올림픽공원 주말 이용 기록(2012~2025)에서 학습한 곡선을 예보에 적용했습니다. 예보 출처: <span id="model-note">—</span></p>
+    </div>
+
+    <div class="card">
+      <div class="row-head">
+        <h2>날씨가 안 좋을 때 갈 수 있는 곳</h2>
+        <label>종목 <select id="event"><option value="">전체</option></select></label>
+      </div>
+      <p class="muted small" id="alt-note"></p>
+      <div class="split">
+        <div id="map" class="map" aria-label="시설 지도"></div>
+        <ol id="alts" class="alts"></ol>
+      </div>
+    </div>
+  </section>
+
+  <section id="tab-region" class="tab" hidden>
+    <div class="card">
+      <h2 id="rg-title"></h2>
+      <div class="kpis" id="rg-kpis"></div>
+    </div>
+    <div class="grid2">
+      <div class="card">
+        <h3>실외 시설 1곳이 1년에 잃는 시간</h3>
+        <div id="rg-bar"></div>
+        <p id="rg-rx" class="rx"></p>
+      </div>
+      <div class="card">
+        <h3>언제 잃는가 (월 × 시각, 잃는 비율)</h3>
+        <div id="rg-heat" class="heat"></div>
+      </div>
+    </div>
+    <div class="card">
+      <h3>이 지역 실외 공공체육시설 구성</h3>
+      <div id="rg-types" class="chips"></div>
+    </div>
+  </section>
+
+  <section id="tab-nation" class="tab" hidden>
+    <div class="card">
+      <h2>전국 시·군·구 비교</h2>
+      <p class="muted" id="nation-note"></p>
+      <label class="search">지역 검색 <input id="q" type="search" placeholder="예: 대구, 홍천"></label>
+      <div class="tablewrap">
+        <table id="ntable">
+          <thead><tr>
+            <th data-k="region" scope="col">지역</th>
+            <th data-k="outdoor" scope="col" class="num">실외 시설</th>
+            <th data-k="lost_open" scope="col" class="num">1곳당 잃는 시간/년</th>
+            <th data-k="heat_sh" scope="col" class="num">더위</th>
+            <th data-k="cold_sh" scope="col" class="num">추위</th>
+            <th data-k="rain_sh" scope="col" class="num">비</th>
+            <th data-k="lost_facility_hours" scope="col" class="num">지역 전체 잃는 시설·시간</th>
+            <th data-k="roof_recoverable_hours" scope="col" class="num">지붕으로 되찾는 시간</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section id="tab-method" class="tab" hidden>
+    <div class="card">
+      <h2>날씨가 이용을 얼마나 줄이나 — 공단 데이터로 잰 곡선</h2>
+      <div class="grid2">
+        <div><div id="curve"></div><p class="muted small">회색 띠는 날짜 단위 재표본 40회의 5~95% 범위입니다.</p></div>
+        <div id="rainbox"></div>
+      </div>
+    </div>
+    <div class="card prose" id="method-text"></div>
+  </section>
+</main>
+
+<footer class="wrap muted small">
+  <p>데이터: 국민체육진흥공단 전국체육시설 정보·공공체육시설 상세 정보·스포츠강좌이용권 등록시설/등록강좌 정보(공공데이터포털), 기상정보활용올림픽공원이용분석정보(문화빅데이터플랫폼) · 기상: Open-Meteo(ERA5, 기상청 모델, CAMS; CC BY 4.0) · 지도: © OpenStreetMap 기여자</p>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
